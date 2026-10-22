@@ -78,6 +78,9 @@
         ]
     },
     "End of Life": {
+        "Potential for energy recovery by incineration": [
+            "parameter_incineration_for_energy_recovery"
+        ],
         "Avoidance of post-consumer waste": [
             "parameter_recognizability_disposal"
         ],
