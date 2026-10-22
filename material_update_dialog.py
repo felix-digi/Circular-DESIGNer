@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 
 BOOLEAN_FIELDS = [
     ("recycling_criticality", "Recycling criticality"),
+    ("incineration_for_energy_recovery", "Incineration for energy recovery"),
     ("environmental_harmfulness", "Environmental harmfulness"),
     ("health_harmfulness", "Health harmfulness"),
     ("monomaterial", "Monomaterial"),
@@ -140,6 +141,7 @@ def empty_material_record() -> Dict[str, Any]:
         "recycling_percentage": None,
         "recyclate_content": None,
         "recycling_criticality": None,
+        "incineration_for_energy_recovery": None,
         "environmental_harmfulness": None,
         "health_harmfulness": None,
         "monomaterial": None,

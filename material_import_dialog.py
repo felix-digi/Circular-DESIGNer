@@ -385,8 +385,7 @@ class MaterialImportDialog(QDialog):
             does not return a value.
 
         Notes:
-            - The follow-up update dialog uses the sibling
-              "materials_validation.json" file next to this Python module.
+            - The follow-up update dialog uses the selected materials database path.
             - The imported material name comes from self.last_result.material_key.
             - Exceptions during merge or update startup are surfaced in a
               critical message box.
@@ -412,7 +411,7 @@ class MaterialImportDialog(QDialog):
             lookup_material = self.last_result.output
             lookup_country_alpha2 = extract_country_alpha2_from_lookup_material(lookup_material)
 
-            json_path = str(Path(__file__).with_name("materials_validation.json"))
+            json_path = database_path
             material_name = self.last_result.material_key
 
             updated = open_or_create_material_update_from_import(

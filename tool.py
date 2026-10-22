@@ -4789,6 +4789,7 @@ class InfoDialog(QDialog):
             data = self.material_parameters[mat_key]
             required = [
                 "recycling_percentage", "recyclate_content", "recycling_criticality",
+                "incineration_for_energy_recovery",
                 "environmental_harmfulness", "health_harmfulness", "monomaterial",
                 "additives_or_fillers", "surface_coatings", "availability"
             ]
@@ -5461,6 +5462,7 @@ class MaterialParameterDialog(QDialog):
         recycling_spinbox (QSpinBox): Input field for specifying the recycling percentage.
         recyclate_spinbox (QSpinBox): Input field for specifying the recyclate content percentage.
         recycling_criticality_combo (QComboBox): Dropdown for selecting if recycling is critical.
+        incineration_for_energy_recovery_combo (QComboBox): Dropdown for selecting if incineration can recover energy.
         environmental_harmfulness_combo (QComboBox): Dropdown for selecting if the material is environmentally harmful.
         health_harmfulness_combo (QComboBox): Dropdown for selecting if the material is harmful to health.
         monomaterial_combo (QComboBox): Dropdown for selecting if the material is monomaterial.
@@ -5516,6 +5518,11 @@ class MaterialParameterDialog(QDialog):
         self.recycling_criticality_combo.addItems(["Yes", "No"])
         form_layout.addRow("Recycling Criticality", self.recycling_criticality_combo)
 
+        self.incineration_for_energy_recovery_combo = QComboBox()
+        self.incineration_for_energy_recovery_combo.addItems(["Yes", "No"])
+        self.incineration_for_energy_recovery_combo.setCurrentText("No")
+        form_layout.addRow("Incineration for energy recovery", self.incineration_for_energy_recovery_combo)
+
         
 
         self.environmental_harmfulness_combo = QComboBox()
@@ -5566,6 +5573,7 @@ class MaterialParameterDialog(QDialog):
                 - "recyclate_content" (int): The recyclate content percentage.
                 - "density [kg/mm^3]" (float): The density in scientific notation.
                 - "recycling_criticality" (bool): Whether recycling is critical.
+                - "incineration_for_energy_recovery" (bool): Whether the material can be incinerated for energy recovery.
                 - "environmental_harmfulness" (bool): Whether the material is environmentally harmful.
                 - "health_harmfulness" (bool): Whether the material is harmful to health.
                 - "monomaterial" (bool): Whether the material is monomaterial.
@@ -5583,6 +5591,7 @@ class MaterialParameterDialog(QDialog):
             "recyclate_content": self.recyclate_spinbox.value(),
             "density [kg/mm^3]": density_scientific,  # Store density in scientific notation
             "recycling_criticality": self.recycling_criticality_combo.currentText() == "Yes",
+            "incineration_for_energy_recovery": self.incineration_for_energy_recovery_combo.currentText() == "Yes",
             "environmental_harmfulness": self.environmental_harmfulness_combo.currentText() == "Yes",
             "health_harmfulness": self.health_harmfulness_combo.currentText() == "Yes",
             "monomaterial": self.monomaterial_combo.currentText() == "Yes",
@@ -5638,6 +5647,7 @@ class MaterialParameterAssessmentDialog(QDialog):
         recycling_spinbox (QSpinBox): Input field for specifying the recycling percentage.
         recyclate_spinbox (QSpinBox): Input field for specifying the recyclate content percentage.
         recycling_criticality_combo (QComboBox): Dropdown for selecting if recycling is critical.
+        incineration_for_energy_recovery_combo (QComboBox): Dropdown for selecting if incineration can recover energy.
         environmental_harmfulness_combo (QComboBox): Dropdown for selecting if the material is environmentally harmful.
         health_harmfulness_combo (QComboBox): Dropdown for selecting if the material is harmful to health.
         monomaterial_combo (QComboBox): Dropdown for selecting if the material is monomaterial.
@@ -5710,6 +5720,12 @@ class MaterialParameterAssessmentDialog(QDialog):
             self.recycling_criticality_combo.setCurrentText("Yes" if val else "No")
         form_layout.addRow("Recycling Criticality:", self.recycling_criticality_combo)
 
+        self.incineration_for_energy_recovery_combo = QComboBox()
+        self.incineration_for_energy_recovery_combo.addItems(["Yes", "No"])
+        val = self.material_data.get("incineration_for_energy_recovery", False)
+        self.incineration_for_energy_recovery_combo.setCurrentText("Yes" if val else "No")
+        form_layout.addRow("Incineration for energy recovery:", self.incineration_for_energy_recovery_combo)
+
 
         self.environmental_harmfulness_combo = QComboBox()
         self.environmental_harmfulness_combo.addItems(["Yes", "No"])
@@ -5767,7 +5783,7 @@ class MaterialParameterAssessmentDialog(QDialog):
 
         Returns:
             dict: Keys — recycling_percentage, recyclate_content,
-                recycling_criticality, environmental_harmfulness,
+                recycling_criticality, incineration_for_energy_recovery, environmental_harmfulness,
                 health_harmfulness, monomaterial, additives_or_fillers,
                 surface_coatings, availability.
 
@@ -5776,6 +5792,7 @@ class MaterialParameterAssessmentDialog(QDialog):
             "recycling_percentage": self.recycling_spinbox.value(),
             "recyclate_content": self.recyclate_spinbox.value(),
             "recycling_criticality": self.recycling_criticality_combo.currentText() == "Yes",
+            "incineration_for_energy_recovery": self.incineration_for_energy_recovery_combo.currentText() == "Yes",
             "environmental_harmfulness": self.environmental_harmfulness_combo.currentText() == "Yes",
             "health_harmfulness": self.health_harmfulness_combo.currentText() == "Yes",
             "monomaterial": self.monomaterial_combo.currentText() == "Yes",
