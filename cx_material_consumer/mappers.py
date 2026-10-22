@@ -147,6 +147,7 @@ def to_custom_output(profile: MaterialProfile, material_key: str) -> dict[str, A
                 "recycling_percentage": None,
                 "recyclate_content": extract_recyclate_content(profile.smc_payload),
                 "recycling_criticality": None,
+                "incineration_for_energy_recovery": None,
                 "environmental_harmfulness": cmp_flags["environmental_harmfulness"],
                 "health_harmfulness": cmp_flags["health_harmfulness"],
                 "monomaterial": None,
