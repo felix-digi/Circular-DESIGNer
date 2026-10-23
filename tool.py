@@ -78,6 +78,11 @@ from material_import_dialog import MaterialImportDialog
 from pathlib import Path
 from material_update_dialog import open_material_update_dialog
 from assembly_time_service import compute_joining_assembly_time
+from classification_service import (
+    collect_part_classifications,
+    find_parent_classification,
+    update_assembly_classifications,
+)
 from tool_change_planner import compute_min_tool_changes
 from mirror_assigned_connections import (
     mirror_empty_assigned_connections_and_delete,
@@ -3552,86 +3557,16 @@ class SelectionDialog(QDialog):
         self.accept()  # Proceed with the analysis
 
     def update_assembly_classification(self, data, classification_structure):
-        """
-        Assign the parent classification of the assembly based on its components' classifications.
-
-        This method determines the classification of the top-level assembly by analyzing
-        the classifications of its child components. It assigns the most appropriate parent
-        classification to the assembly.
-
-        Args:
-            data (dict): The hierarchical structure data containing the assembly and its components.
-            classification_structure (dict): The classification hierarchy used to determine
-                                            the parent classification.
-
-        Returns:
-            None
-
-        Notes:
-            - The top-level assembly is assumed to be the first item in the `data` list.
-            - The `collect_classifications` method is used to gather classifications from
-            the components of the assembly.
-            - The `find_parent_classification_from_list` method is used to determine the
-            parent classification based on the collected classifications.
-            - The determined classification is assigned to the `classification` key of the
-            top-level assembly.
-        """
-        #Get assembly data
-        assembly = data.get("data", [])[0]
-
-        # Collect all classifications from the components
-        classifications = self.collect_classifications(assembly)
-
-        # Find the parent classification for the collected classifications
-        parent_classification = self.find_parent_classification_from_list(classification_structure, classifications)
-
-        # Assign the parent classification to the assembly
-        data["classification"] = parent_classification
+        """Derive assembly classifications from the leaf parts' classification paths."""
+        return update_assembly_classifications(data, classification_structure)
 
     def collect_classifications(self, assembly):
-        """
-        Recursively collects all classifications from the components of an assembly and its subassemblies.
-        """
-        classifications = []
-        for component in assembly.get("components", []):
-            if "basic_parameters" in component and "classification" in component["basic_parameters"]:
-                classifications.append(component["basic_parameters"]["classification"])
-            # If the component is a subassembly, recursively collect classifications
-            if "components" in component and component["components"]:
-                classifications.extend(self.collect_classifications(component))
-        return classifications
+        """Collect leaf classifications without using stale subassembly classifications."""
+        return collect_part_classifications(assembly)
 
     def find_parent_classification_from_list(self, classification_structure, classifications):
-        """
-        Recursively collect all classifications from the components of an assembly and its subassemblies.
-
-        This method traverses the hierarchical structure of an assembly and collects the
-        classifications of all its components and subassemblies.
-
-        Args:
-            assembly (dict): The assembly data containing components and subassemblies.
-
-        Returns:
-            list: A list of classifications collected from the components and subassemblies.
-
-        Notes:
-            - Classifications are retrieved from the `basic_parameters` key of each component.
-            - If a component is a subassembly, the method recursively collects classifications
-            from its child components.
-        """
-        def traverse_structure(structure, path=[]):
-            for key, value in structure.items():
-                if isinstance(value, dict):
-                    # Check if all classifications are within this branch
-                    if all(cls in value for cls in classifications):
-                        return key
-                    # Recursively traverse deeper
-                    result = traverse_structure(value, path + [key])
-                    if result:
-                        return result
-            return None
-
-        return traverse_structure(classification_structure)
+        """Find the nearest shared parent across all depths of the classification tree."""
+        return find_parent_classification(classification_structure, classifications)
 
 class InfoDialog(QDialog):
     """
@@ -5922,10 +5857,17 @@ class CalculationDialog(QDialog):
             - If an error occurs, the status bar is updated with the error message, and a critical error dialog is displayed.
         """
         self.status_bar.setText("Status: Starting calculations...\n")
+        self.all_parameters = {}
+        self.goal_scores = {}
+        self.r_strategy_scores = {}
 
         try:
-            # Calculate classification averages
-            self.calculate_classification_averages()
+            # Derive the assembly classification and validate its reference examples first.
+            if not self.calculate_classification_averages():
+                self.status_bar.setText(
+                    "Status: Calculation stopped. Check part classifications and assembly reference examples."
+                )
+                return
             current_status = self.status_bar.text()
             self.status_bar.setText(current_status + "Classification averages calculated.\n")
 
@@ -6176,36 +6118,37 @@ class CalculationDialog(QDialog):
         return aggregated_fractions
 
     def calculate_classification_averages(self):
+        """Derive the main assembly class and load its reference averages.
+
+        Recompute from leaf part classifications on every run, including saved
+        projects with a missing or stale assembly classification. Return False
+        after one warning if no common parent or reference examples are available,
+        so calculations cannot continue with missing or stale averages.
         """
-        Calculate averages for various parameters based on the classification of the main assembly.
+        for name in (
+            "average_number_of_components", "average_number_of_materials",
+            "average_number_of_joining_connections", "average_number_of_joining_types",
+            "average_number_of_tools", "average_disassembly_time", "average_assembly_time",
+        ):
+            setattr(self, name, None)
 
-        This method retrieves the classification of the main assembly, finds examples for the classification
-        in the nested structure, and calculates averages for parameters such as the number of components,
-        materials, joining connections, tools, disassembly and (re-)assembly time.
-
-        Args:
-            None
-
-        Returns:
-            None
-
-        Notes:
-            - If the main assembly does not have a classification, a warning is displayed.
-            - If no examples are found for the classification, a warning is displayed.
-            - Averages are calculated only if valid examples are found.
-            - The calculated averages are stored as instance variables.
-        """
-        # Get the classification of the main assembly
-        main_classification = self.data.get("classification")
+        main_classification = update_assembly_classifications(self.data, self.classification_data)
         if not main_classification:
-            QMessageBox.warning(self, "Warning", "The main assembly does not have a classification.")
-            return
+            QMessageBox.warning(
+                self, "Classification unavailable",
+                "The assembly classification could not be derived from its parts. "
+                "Ensure every part has a valid classification with a shared parent in the classification file.",
+            )
+            return False
 
-        # Find the examples for the main classification in the nested structure
         examples = self.find_examples_in_nested_structure(self.classification_data, main_classification)
         if not examples:
-            QMessageBox.warning(self, "Warning", f"No examples found for classification '{main_classification}'.")
-            return
+            QMessageBox.warning(
+                self, "Classification examples unavailable",
+                f"No reference examples are available for the derived assembly classification '{main_classification}'. "
+                "Add assembly reference examples to this classification before calculating.",
+            )
+            return False
 
         # Initialize sums and counts for averaging
         total_components = 0
@@ -6224,17 +6167,16 @@ class CalculationDialog(QDialog):
             total_joining_connections += example.get("number_joining_connections", 0)
             total_different_joining_connections += example.get("number_of_different_joining_connections", 0)
             total_tools += example.get("number_of_tools", 0)
-            # Safely convert disassembly_time [s] to an integer
+            # Preserve fractional seconds in numeric or string reference times.
             try:
-                total_disassembly_time += int(example.get("disassembly_time [s]", 0))
-            except ValueError:
-                total_disassembly_time += 0  # Default to 0 if conversion fail
-            
-            # Safely convert disassembly_time [s] to an integer
+                total_disassembly_time += float(example.get("disassembly_time [s]", 0))
+            except (TypeError, ValueError):
+                total_disassembly_time += 0
+
             try:
-                total_assembly_time += int(example.get("assembly_time [s]", 0))
-            except ValueError:
-                total_assembly_time += 0  # Default to 0 if conversion fail
+                total_assembly_time += float(example.get("assembly_time [s]", 0))
+            except (TypeError, ValueError):
+                total_assembly_time += 0
         
         # Calculate averages and store them as instance variables
         self.average_number_of_components = total_components / example_count
@@ -6244,6 +6186,7 @@ class CalculationDialog(QDialog):
         self.average_number_of_tools = total_tools / example_count
         self.average_disassembly_time = total_disassembly_time / example_count
         self.average_assembly_time = total_assembly_time / example_count
+        return True
 
     
     def find_examples_in_nested_structure(self, classification_data, main_classification):
