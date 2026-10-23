@@ -376,7 +376,7 @@ class AssemblyTimeService:
             joining_connections (Any): Parsed joining connection hierarchy as a mapping or list.
 
         Steps:
-            1. Traverse each joining connection node recursively.
+            1. Traverse every child recursively, even when its parent has an explicit time.
             2. Use the explicit `assembly_time` value when a node defines one.
             3. Otherwise inspect direct `sub_connections` for resolvable child times.
             4. Derive the node's effective time as the median of direct child times.
@@ -389,6 +389,8 @@ class AssemblyTimeService:
         Notes:
             - Nodes without an explicit time and without resolvable child times are omitted.
             - Derived values use the median of direct child effective times.
+            - A node's explicit time takes precedence over its child-derived median.
+            - Parents are indexed after descendants, preserving parent values for repeated names.
             - Invalid `assembly_time` values raise `ValueError`.
         """
         index: Dict[str, float] = {}
@@ -400,6 +402,15 @@ class AssemblyTimeService:
             name = node.get("name")
             raw_time = node.get("assembly_time", None)
 
+            # Index all descendants before resolving this node's own time.
+            child_times: List[float] = []
+            children = node.get("sub_connections")
+            if isinstance(children, list):
+                for child in children:
+                    child_time = effective_time(child)
+                    if child_time is not None:
+                        child_times.append(float(child_time))
+
             if raw_time is not None:
                 try:
                     value = float(raw_time)
@@ -410,16 +421,6 @@ class AssemblyTimeService:
                 if name is not None:
                     index[str(name)] = value
                 return value
-
-            children = node.get("sub_connections")
-            if not isinstance(children, list) or not children:
-                return None
-
-            child_times: List[float] = []
-            for child in children:
-                child_time = effective_time(child)
-                if child_time is not None:
-                    child_times.append(float(child_time))
 
             if not child_times:
                 return None
