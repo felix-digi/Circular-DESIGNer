@@ -18,6 +18,7 @@
 from __future__ import annotations
 import sys
 import json
+import math
 import re
 import uuid
 from typing import Any, Dict, List, Iterable, Optional, Tuple
@@ -5973,6 +5974,9 @@ class CalculationDialog(QDialog):
             #Calculate the binary material parameters
             self.calculate_parameters_material_binary()
 
+            # Calculate the mass share suitable for incineration with energy recovery
+            self.calculate_parameter_incineration_for_energy_recovery()
+
             #Calculate the recycling content and recyclate content parameters
             self.calculate_recycling_and_recyclate_content()
 
@@ -7131,6 +7135,53 @@ class CalculationDialog(QDialog):
                 target_value=target_value
             )
     
+    def calculate_parameter_incineration_for_energy_recovery(self):
+        """Return the eligible share of the assembly's known part mass (0 to 1).
+
+        Count each leaf occurrence once, excluding aggregate subassembly masses.
+        Use a leaf's mass [kg], falling back to total mass [kg] when it is unset.
+        Only positive, finite numeric masses contribute to the calculation.
+        All such masses enter the denominator, including parts whose material or
+        incineration flag is unknown. Only materials explicitly assessed True
+        for incineration_for_energy_recovery enter the numerator.
+        Return None when there is no usable part mass or materials database.
+        """
+        self.parameter_incineration_for_energy_recovery = None
+        if not isinstance(self.material_data, dict):
+            return None
+
+        total_mass = 0.0
+        eligible_mass = 0.0
+
+        def collect_part_masses(components):
+            nonlocal total_mass, eligible_mass
+            for component in components:
+                children = component.get("components") or []
+                if children:
+                    collect_part_masses(children)
+                    continue
+
+                mass = component.get("mass [kg]")
+                if mass is None:
+                    mass = component.get("total mass [kg]")
+                if (
+                    isinstance(mass, bool)
+                    or not isinstance(mass, (int, float))
+                    or not math.isfinite(mass)
+                    or mass <= 0
+                ):
+                    continue
+
+                total_mass += mass
+                material = self.material_data.get(component.get("material"), {})
+                if material.get("incineration_for_energy_recovery") is True:
+                    eligible_mass += mass
+
+        collect_part_masses(self.data.get("data", []))
+        if total_mass > 0:
+            self.parameter_incineration_for_energy_recovery = eligible_mass / total_mass
+        return self.parameter_incineration_for_energy_recovery
+
     def calculate_recycling_and_recyclate_content(self):
         """
         Calculates the average recycling percentage and recyclate content
@@ -7533,6 +7584,7 @@ class CalculationDialog(QDialog):
         # Add material binary parameters
         material_binary_keys = [
             "parameter_recycling_criticality",
+            "parameter_incineration_for_energy_recovery",
             "parameter_environmental_harmfulness",
             "parameter_health_harmfulness",
             "parameter_additives_or_fillers",
@@ -8908,7 +8960,8 @@ class ParameterResultsDialog(QDialog):
         # Add each parameter as a label-value pair
         for key, value in all_parameters.items():
             formatted_key = key.replace("_", " ").capitalize()
-            label = QLabel(f"<b>{formatted_key}:</b> {round(value, 2)}")
+            formatted_value = round(value, 2) if isinstance(value, (int, float)) else "N/A"
+            label = QLabel(f"<b>{formatted_key}:</b> {formatted_value}")
             label.setWordWrap(True)
             layout.addWidget(label)
 
