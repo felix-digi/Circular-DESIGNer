@@ -84,6 +84,7 @@ from classification_service import (
     update_assembly_classifications,
 )
 from tool_change_planner import compute_min_tool_changes
+from r_strategy_weights import validate_goal_weights
 from mirror_assigned_connections import (
     mirror_empty_assigned_connections_and_delete,
     synchronize_assigned_connections_by_richer_side,
@@ -673,7 +674,11 @@ class MainWindow(QMainWindow):
             2. Display the dialog to the user.
             3. If the dialog is accepted, retrieve the updated goal data.
         """
-        dialog = GoalDialog(Config())
+        try:
+            dialog = GoalDialog(Config())
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid goal weights", str(exc))
+            return
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
 
@@ -5862,6 +5867,13 @@ class CalculationDialog(QDialog):
         self.r_strategy_scores = {}
 
         try:
+            validate_goal_weights(self.goal_to_r_strategy)
+        except ValueError as exc:
+            self.status_bar.setText("Status: Calculation stopped. Correct the goal-to-R-strategy weights.")
+            QMessageBox.warning(self, "Invalid goal weights", str(exc))
+            return
+
+        try:
             # Derive the assembly classification and validate its reference examples first.
             if not self.calculate_classification_averages():
                 self.status_bar.setText(
@@ -7613,6 +7625,10 @@ class CalculationDialog(QDialog):
             - The results are stored in the `self.r_strategy_scores` attribute.
         """
 
+        # Reject malformed rows before positional lookup can shift weights to another strategy.
+        self.r_strategy_scores = {}
+        validate_goal_weights(self.goal_to_r_strategy)
+
         # Initialize a dictionary to store the R-strategy scores
         r_strategy_scores = {f"R{i}": 0 for i in range(10)}
 
@@ -7708,6 +7724,7 @@ class GoalDialog(QDialog):
         super().__init__(parent)
         self.goal_to_r_strategy_file_path = config.goal_to_r_strategy_json
         self.goal_data = load_json_file(self.goal_to_r_strategy_file_path)
+        validate_goal_weights(self.goal_data)
 
 
         self.setWindowTitle("Goal Weighting")
@@ -7774,6 +7791,11 @@ class GoalDialog(QDialog):
             - The method writes the updated `self.goal_data` to the file specified by `self.goal_to_r_strategy_file_path`.
             - It uses the `dump_file` function to handle the file writing.
         """
+        try:
+            validate_goal_weights(self.goal_data)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid goal weights", str(exc))
+            return
         dump_file(self.goal_data, self.goal_to_r_strategy_file_path)
 
 class ParameterAssignmentDialog(QDialog):
