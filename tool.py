@@ -6933,6 +6933,7 @@ class CalculationDialog(QDialog):
         Notes:
             - The method uses a set cover algorithm to find the minimum number of material groups
             that cover all classification sets.
+            - The score is capped at 1 if the reference requires more material types than the assembly uses.
             - If no materials are found (division by zero), the parameter is set to None.
             - The result is stored in `self.parameter_number_of_materials`.
         """
@@ -6977,7 +6978,9 @@ class CalculationDialog(QDialog):
 
         # Step 4: Calculate the quotient
         if current_number_of_material_types > 0:
-            self.parameter_number_of_materials = minimum_number_of_material_types / current_number_of_material_types
+            self.parameter_number_of_materials = min(
+                minimum_number_of_material_types / current_number_of_material_types, 1.0
+            )
         else:
             self.parameter_number_of_materials = None  # Handle division by zero if no materials are found
 
